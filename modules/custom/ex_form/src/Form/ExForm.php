@@ -65,9 +65,8 @@ class ExForm extends FormBase {
     }
 
     public function submitForm(array &$form, FormStateInterface $form_state) {
-
         $send_mail = new PhpMail();
-        $from = $form['email'];
+        $from = $form_state->getValue('email');
         $to = "kurts_k@list.ru";
         $message['headers'] = [
         'content-type' => 'text/html',
@@ -77,14 +76,54 @@ class ExForm extends FormBase {
         ];
 
         $message['to'] = $to;
-        $message['subject'] = $form['subject'];
-        $message['body'] = $form['message'];
+        $message['subject'] = $form_state->getValue('subject');
+        $message['body'] = $form_state->getValue('message');
         $send_mail->mail($message);
 
         $send_mail == true ? $res = 'Ваше письмо отправлено' : $res = 'Ваше письмо не отправлено';
 
+        if ($send_mail) {
+          $logMessage = "Отправлено письмо от " . $form_state->getValue('email');
+          Drupal::logger('ex_post')->notice($logMessage);
+        }
+
         drupal_set_message($res);
 
+        self::hubspot($form_state);
     }
 
+    public static function hubspot($form_state) {
+
+      $url = "https://api.hubapi.com/contacts/v1/contact/createOrUpdate/email/" . $form_state->getValue('email') . "/?hapikey=b8a9f2df-9910-4d75-941c-7e643d8c98e3";
+
+      $data = [
+        'properties' => [
+          [
+            'property' => 'email',
+            'value'    => $form_state->getValue('email'),
+          ],
+          [
+            'property' => 'firstname',
+            'value'    => $form_state->getValue('name'),
+          ],
+          [
+            'property' => 'lastname',
+            'value'    => $form_state->getValue('lastname'),
+          ],
+          [
+            'property' => 'phone',
+            'value'    => '555-1212'
+          ]
+        ]
+      ];
+
+      $json = json_encode($data,true);
+
+      $response = Drupal::httpClient()->post($url.'&_format=hal_json', [
+        'headers' => [
+          'Content-Type' => 'application/json'
+        ],
+        'body' => $json
+      ]);
+    }
 }
